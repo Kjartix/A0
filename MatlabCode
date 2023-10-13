@@ -1,0 +1,189 @@
+%DISCLAIMER The Code is a bit "copy paste" due to our team working in two
+%files at the same time to implement different things, 
+
+Fs = 40000;%Sampling frequency
+Fn = Fs/2;%Nyquist frequency
+
+[y,Fs] = audioread(['trafikkstøy_30min.wav']);%This samples the file and stores the values in y, with Fs as sample rate
+[calib1, Fs_2] = audioread('calibfør.wav'); %Samples of the first calib
+[calib2, Fs_3] = audioread('calibEtter.wav');%Samples the second calib
+
+
+%-------------------Definitions
+%We define some paramaters that are important for the processing
+N = length(y);
+%y=y(1:N);
+t = (0:N-1) / Fs; %Time axis
+y = y.*(1/0.169); %Calibration gain
+
+tcalib1 = (0:length(calib1))/ Fs; %Time axis
+tcalib2 = (0:length(calib2))/ Fs; 
+
+calib1 =  calib1.*(1/0.169);%Gain of time signal
+calib2 = calib2.*(1/0.169);
+
+%--------------SNIPPETS----------------------
+%y = y(200000:240000);%Here we find the one-second snippet we want
+%y= y(200000:200000+1/8 *Fs);%Here we find the 1/8 second snippet
+%y= y(200000:(200000+60*Fs)); % 60 second snippet
+%y = y(1:Fs*1800); %30 minute snippet
+%---------FFT OF THE SIGNAL----------------------------------  
+N = length(y);
+
+NFFT = 2^nextpow2(N);  % Next power of 2 for FFT 
+
+fft_result = fft(y, NFFT);%/N;  % Perform the FFT///
+fft_calib1 = fft(calib1,NFFT);
+fft_calib2 = fft(calib2, NFFT);
+
+frequencies = (0:NFFT-1)*(Fs/NFFT); % Frequency axis for the FFT result
+
+%-------------------------------A- Weighting----------------
+
+weightFilt = weightingFilter("A-weighting",Fs); %Creates a A-weighting filter
+complianceStatus = isStandardCompliant(weightFilt,'class 1')
+visualize(weightFilt,'class 1') %Plots the frequency response of the A weighted filter 
+
+yA = weightFilt(y);%Apploes the A weighted filter to y
+FFTyA = fft(yA, NFFT);%FFT of A weighted signal
+
+
+
+
+%---------SUBPLOTTING of signals------------------------------
+%If you want both plots in the same plot, comment out the two lines saying
+%subplot, and Comment in the 'hold on' function
+
+% figure;
+% subplot(2, 1, 1);
+% plot(t(1:N),y,'b');
+% xlabel('Time (s)');
+% ylabel('Amplitude');
+% title('Time signal of Z-weighed signal');
+% ylim([-3 3]);
+% %hold on;
+% 
+% subplot(2, 1, 2);
+% plot(t(1:N),yA,'r');
+% xlabel('Time (s)');
+% ylabel('Amplitude');
+% title('Time signal of the A-weighed signal');
+% ylim([-3 3]);
+% 
+
+%---------CALIB SIGNALS-------------------------------------
+%Here we will plott the calibration signals as well as their fourier transforms
+%Comment in if you want to plot
+
+% subplot(2,2,1)
+% plot(tcalib1(1:length(calib1)),calib1);
+% xlabel('Time (s)');
+% ylabel('Amplitude');
+% title('Calibration signal from before recording ');
+% xlim([0 10]);
+% 
+% subplot(2,2,3)
+% plot(tcalib2(1:length(calib2)),calib2);
+% xlabel('Time (s)');
+% ylabel('Amplitude');
+% title('Calibration signal from after recording ');
+% xlim([0 10]);
+% 
+% subplot(2, 2, 2);
+% plot(frequencies(1:NFFT/32+1), mag_spectrum_calib1);
+% title('Magnitude Spectrum of Calibration signal before recording');
+% xlabel('Frequency (Hz)');
+% ylabel('Magnitude');
+% xlim([500 1500])
+% 
+% subplot(2, 2, 4);
+% plot(frequencies(1:NFFT/32+1), mag_spectrum_calib2);
+% title('Magnitude spectrum of Calibration signal after recording');
+% xlabel('Frequency (Hz)');
+% ylabel('Magnitude');
+% xlim([500 1500])
+
+
+
+%---------------power spectrum---------------
+%Computing the power spectrum and converting to dB
+Power = 2* abs(fft_result).^2/NFFT.^2;%Two sided power spectrum
+PowerdB =10*log10(Power); 
+
+%--------------------------
+
+%PowerdB = 20 *log10(Power);
+
+%SUmming the components in the power spectrum to check if it is close to
+%SPL that has been computed
+
+SoundPower = sum(Power)
+SoundPowerdB = 10 * log10(SoundPower)
+
+%Plotting the power spectrum
+figure;
+semilogx(frequencies(1:NFFT/4+1),PowerdB(1:NFFT/4+1));
+xlim([10 20000] )
+xlabel('Frequencies(Hz)');
+ylabel('Power density (dB/Hz)');
+title('Power density of the 0.125 Second Snippet');
+
+%---------------Computing SPL and A weighed SPL
+pref=20e-6;
+prms = rms(y)
+spl= 20*log10(prms/pref)
+% 
+
+prmsA = rms(yA)
+splA = 20*log10(prmsA/pref)
+
+%Third Octave band analysis
+
+% buffer_size = 2048;
+% overlap = buffer_size/2;
+% [pxx, f] = pwelch(y, rectwin(buffer_size), overlap, 4096, fs_1);
+% 
+% figure;
+% poctave(pxx, Fs, f, 'BandsPerOctave',3, 'FilterOrder', 2, 'FrequencyLimits', [200 Fs/2], 'psd')
+% xlabel('Frequency [kHz]');
+% ylabel('Average Power [dB]');
+% title('Periodogram of signal with buffer size 2048');
+% legend('data_1')
+% grid on;
+ 
+%-------------------Computing Leq for series of different lengths
+dataA = weightFilt(data_correct);
+
+T_eq18 = 1/8;
+T_eq1 = 1;
+T_eq30 = 1862;
+
+n1_samples = T_eq1*Fs;
+n18_samples = T_eq18*Fs;
+
+
+t1=1/fs*[0:n1_samples-1];
+t18=1/fs*[0:n18_samples-1];
+
+
+iv1 = [1:n1_samples];
+iv18 = [1:n18_samples];
+
+
+integral_p11 = trapz(t1, data_correct(iv1).^2/pref.^2);
+integral_p181 = trapz(t18, dataA(iv18).^2/pref.^2);
+
+Leq_1 = 10*log10(integral_p11)
+Leq_18 = 10*log10(1/T_eq18*integral_p181)
+
+
+
+
+
+
+
+
+
+
+
+
